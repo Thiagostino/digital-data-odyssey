@@ -2406,13 +2406,19 @@ function playFloorY() {
   return Math.round(Math.max(VIEWH * 0.52, Math.min(VIEWH - 52, padTop - 8)));
 }
 function tunFY() { return playFloorY(); }
+/* A fase do tunel e proporcional a largura visivel. Sem isso, em tela estreita
+   cabia menos de um obstaculo por vez e o tempo de reacao caia pela metade:
+   a mesma fase parecia outra no celular. */
+var TUN_REF = 470;
+function tunFator() { return Math.max(0.5, Math.min(1.35, VIEWW / TUN_REF)); }
 function tunCY() { return 42; }
 
 function tunnelStart() {
   TUN = {
-    t: 0, dist: 0, goal: 3600, spd: 3.2, anim: 0,
+    t: 0, dist: 0, goal: Math.round(3600 * tunFator()), spd: 3.2 * tunFator(), anim: 0,
+    f: tunFator(),
     px: Math.max(18, Math.round(VIEWW * 0.26)), y: 0, vy: 0, onG: true, face: 1,
-    hp: 3, inv: 0, obs: [], stars: [], nextObs: 300, starIdx: 0,
+    hp: 3, inv: 0, obs: [], stars: [], nextObs: 300 * tunFator(), starIdx: 0,
     ok: 0, okT: 0, shake: 0
   };
   TUN.y = tunFY() - P.h;
@@ -2442,11 +2448,11 @@ function tunnelHit() {
   if (T.inv > 0) return;
   T.hp--; T.inv = 84; T.shake = 14; SFX.error();
   burst(T.px + 6, T.y + 8, 16, '#ff4d6d', 2.4);
-  T.spd = Math.max(2.6, T.spd - 1.0);
+  T.spd = Math.max(2.6 * T.f, T.spd - 1.0 * T.f);
   if (T.hp <= 0) {
     T.hp = 3; T.inv = 110; T.y = tunFY() - P.h; T.vy = 0;
-    T.dist = 0; T.spd = 3.2;
-    T.obs.length = 0; T.stars.length = 0; T.nextObs = 300; T.starIdx = 0;
+    T.dist = 0; T.spd = 3.2 * T.f;
+    T.obs.length = 0; T.stars.length = 0; T.nextObs = 300 * T.f; T.starIdx = 0;
     toast('BUFFER ESTOUROU · REINICIANDO O STREAM', '#ffb020');
   }
 }
@@ -2458,7 +2464,7 @@ function tunnelUpdate() {
   if (T.inv > 0) T.inv--;
   if (T.shake > 0) T.shake--;
 
-  T.spd = Math.min(4.8, T.spd + 0.0026);
+  T.spd = Math.min(4.8 * T.f, T.spd + 0.0026 * T.f);
   T.dist += T.spd;
   T.anim += T.spd;
 
@@ -2484,7 +2490,7 @@ function tunnelUpdate() {
 
   // geracao de obstaculos
   T.nextObs -= T.spd;
-  if (T.nextObs <= 0 && T.dist < T.goal - 320) {
+  if (T.nextObs <= 0 && T.dist < T.goal - 320 * T.f) {
     var n = T.obs.length;
     var kinds = ['block', 'hang', 'pit', 'roller', 'hang', 'block', 'pit', 'drone',
                  'block', 'roller', 'pit', 'hang', 'drone', 'block'];
@@ -2492,13 +2498,15 @@ function tunnelUpdate() {
     var ox = VIEWW + 24;
     if (k === 'block') T.obs.push({ kind: k, x: ox, y: FY - 26, w: 22, h: 26, label: TUN_OBS_LABEL[n % 4] });
     else if (k === 'hang') T.obs.push({ kind: k, x: ox, y: CY, w: 26, h: FY - CY - 36, label: 'SCHEMA DRIFT' });
-    else if (k === 'roller') T.obs.push({ kind: k, x: ox, y: FY - 22, w: 22, h: 22, extra: 0.9, spin: 0, label: 'BURN RATE' });
+    else if (k === 'roller') T.obs.push({ kind: k, x: ox, y: FY - 22, w: 22, h: 22, extra: 0.9 * T.f, spin: 0, label: 'BURN RATE' });
     else if (k === 'drone') T.obs.push({ kind: k, x: ox, y: FY - 54, w: 30, h: 22, bob: 0, label: 'ALERTA DE CUSTO' });
     else {
-      var pw3 = Math.round(Math.max(34, Math.min(78, T.spd * 15 - 12)));
+      // largura do abismo proporcional a velocidade: mantem constante a
+      // tolerancia de tempo do pulo (a mesma margem em qualquer tela)
+      var pw3 = Math.round(Math.max(22, Math.min(90, T.spd * 20 - 12)));
       T.obs.push({ kind: k, x: ox, y: FY, w: pw3, h: 70, label: 'GAP' });
     }
-    T.nextObs = 210 + (n % 3) * 40;
+    T.nextObs = (210 + (n % 3) * 40) * T.f;
   }
   // 5 estrelas garantidas, na altura da cabeca (pegas correndo)
   if (T.starIdx < 8 && T.dist > T.goal * (0.10 + T.starIdx * 0.105)) {
