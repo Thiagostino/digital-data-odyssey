@@ -6,7 +6,19 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0a1420">
-<title>Digital Data Odyssey — Do Mapeamento ao Data Maestro</title>
+
+<!-- ===== TITULO E PREVIA DO LINK ==========================================
+     O <title> e o que aparece na aba do navegador e no card do WhatsApp,
+     Teams e Slack. As tags og:* controlam o card compartilhado.
+     Troque a URL de og:image pelo seu endereco publicado.
+     ===================================================================== -->
+<title>Digital Data Odyssey — Do Tagueamento à Inteligência Comportamental</title>
+<meta name="description" content="Jogo de plataforma sobre governanca de dados: mapeie o dataLayer, publique o SDK, passe pelo gate de qualidade, escolha a rota no Data Maestro e energize a IA comportamental.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Digital Data Odyssey — Do Tagueamento à Inteligência Comportamental">
+<meta property="og:description" content="Mapeie o dataLayer, passe pelo gate de qualidade, derrote o miniboss de FinOps e energize a IA comportamental.">
+<meta property="og:image" content="https://SEU-USUARIO.github.io/SEU-REPOSITORIO/capa.png">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
   html,body{
@@ -29,6 +41,57 @@
 <body>
 <canvas id="game"></canvas>
 <script>
+/* =====================================================================
+   0. TAGUEAMENTO — dataLayer + GA4 (gtag) ou GTM
+   Preencha UM dos dois IDs abaixo. Vazio = nada e carregado e o jogo
+   segue 100% offline. Os eventos sempre vao para o window.dataLayer,
+   entao da para plugar GTM depois sem tocar no codigo do jogo.
+   ===================================================================== */
+var GA4_ID = 'G-926LQSHS9W';     // GA4 do Digital Data Odyssey
+var GTM_ID = '';                 // ex.: 'GTM-XXXXXXX'  (alternativa ao GA4 direto)
+var GAME_VERSION = 'v27';
+
+window.dataLayer = window.dataLayer || [];
+function gtag() { window.dataLayer.push(arguments); }
+
+(function carregaTagueamento() {
+  var d = document, s0 = d.getElementsByTagName('script')[0], sc;
+  if (GTM_ID) {
+    window.dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+    sc = d.createElement('script'); sc.async = true;
+    sc.src = 'https://www.googletagmanager.com/gtm.js?id=' + GTM_ID;
+    s0.parentNode.insertBefore(sc, s0);
+  } else if (GA4_ID) {
+    sc = d.createElement('script'); sc.async = true;
+    sc.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA4_ID;
+    s0.parentNode.insertBefore(sc, s0);
+    gtag('js', new Date());
+    gtag('config', GA4_ID, { send_page_view: true });
+  }
+})();
+
+var DDO_DEBUG = /[?&]debug=1/.test(location.search);
+var SESSION_ID = 's' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+var RUN_ID = SESSION_ID + '-1', RUN_N = 1, RUN_T0 = Date.now();
+var TRACK_LOG = [];              // espelho local: util para QA e para o modo debug
+
+/* nomes em snake_case, <=40 caracteres; valores curtos (limites do GA4) */
+function track(evento, params) {
+  var p = {}, k;
+  if (params) for (k in params) if (params.hasOwnProperty(k)) p[k] = params[k];
+  p.game_version = GAME_VERSION;
+  p.run_id = RUN_ID;
+  p.session_seconds = Math.round((Date.now() - RUN_T0) / 1000);
+  var push = { event: evento };
+  for (k in p) if (p.hasOwnProperty(k)) push[k] = p[k];
+  window.dataLayer.push(push);                       // padrao GTM
+  if (GA4_ID && typeof window.gtag === 'function') window.gtag('event', evento, p);
+  TRACK_LOG.push(push);
+  if (TRACK_LOG.length > 400) TRACK_LOG.shift();
+  if (DDO_DEBUG && window.console) console.log('%c[ddo]', 'color:#4fdcff', evento, p);
+}
+function novaRun() { RUN_N++; RUN_ID = SESSION_ID + '-' + RUN_N; RUN_T0 = Date.now(); }
+
 "use strict";
 /* =====================================================================
    DIGITAL DATA ODYSSEY: DO MAPEAMENTO AO DATA MAESTRO, REAL-TIME & IA
@@ -664,18 +727,26 @@ function doAction(id) {
   if (state === 'accept') {
     if (id === 'accept-check') { game.accepted = !game.accepted; SFX.pick(); return; }
     if (id === 'accept-go') {
-      if (game.accepted) { resetRun(true); state = 'play'; MUS.on = true; MUS.next = 0; SFX.ok(); }
+      if (game.accepted) {
+        resetRun(true); state = 'play'; MUS.on = true; MUS.next = 0; SFX.ok();
+        track('game_start', { aceite: 'sim' });
+      }
       else { SFX.nope(); game.acceptWarn = game.t + 50; }
       return;
     }
   }
   if (id === 'restart' && state === 'dead') {
+    track('checkpoint_restart', { origem: game.deadIn || 'world', zone: game.zone + 1 });
     if (game.deadIn === 'arena') { game.deadIn = null; arenaStart(game.arenaFrom || 'batch'); return; }
     if (game.deadIn === 'tunnel') { game.deadIn = null; tunnelStart(); return; }
     resetRun(false); state = 'play'; MUS.on = true; return;
   }
   if (id === 'again' && (state === 'win' || state === 'win42' || state === 'space' || state === 'dest')) {
-    resetRun(true); state = 'play'; MUS.on = true; MUS.next = 0; return;
+    track('game_restart', { origem: state });
+    novaRun();
+    resetRun(true); state = 'play'; MUS.on = true; MUS.next = 0;
+    track('game_start', { aceite: 'sim' });
+    return;
   }
 
   if (state === 'route' && id.indexOf('r-') === 0) {
@@ -689,6 +760,7 @@ function doAction(id) {
       toast('DATA MESH · GLUE → STEP FUNCTIONS → S3 → ATHENA', '#7ef29d');
     }
     burst(maestro.x + 20, maestro.y + 20, 40, '#39d3ff', 3);
+    track('route_selected', { rota: game.route, tags_ate_aqui: game.tagsGot });
     state = 'play';
     return;
   }
@@ -696,6 +768,7 @@ function doAction(id) {
     for (var i = 0; i < DESTS.length; i++) {
       if (DESTS[i][0] === id) {
         game.dest = i;
+        track('destination_selected', { destino: DESTS[i][1], destino_id: id });
         game.score += 3000;
         burst(brain.x + 38, brain.y + 30, 50, DESTS[i][2], 3.4);
         miniStart(MINI_KIND[id]);          // cada destino tem a sua minifase
@@ -703,11 +776,12 @@ function doAction(id) {
       }
     }
   }
-  if (state === 'mini' && id === 'mini-skip') { miniWin(); return; }
-  if (state === 'tunnel' && id === 'tun-skip') { TUN.ok = 1; TUN.okT = 0; SFX.victory(); return; }
-  if (state === 'arena' && id === 'arena-skip') { ARENA.boss.hp = 1; arenaBossHit(); return; }
+  if (state === 'mini' && id === 'mini-skip') { track('minigame_skip', { minigame: MINI.kind }); miniWin(); return; }
+  if (state === 'tunnel' && id === 'tun-skip') { track('tunnel_skip', {}); TUN.ok = 1; TUN.okT = 0; SFX.victory(); return; }
+  if (state === 'arena' && id === 'arena-skip') { track('finops_boss_skip', {}); ARENA.boss.hp = 1; arenaBossHit(); return; }
   if (state === 'q42') {
     if (id === 'q42-sim') {
+      track('q42_answer', { resposta: 'sim' });
       state = 'space'; game.spaceT = 0; game.score += 4200;
       game.shipX = undefined; FLY.drag = false;
       stars.length = 0;
@@ -716,6 +790,8 @@ function doAction(id) {
       return;
     }
     if (id === 'q42-nao') {
+      track('q42_answer', { resposta: 'nao' });
+      novaRun();
       toast('RESPOSTA NEGADA · REINICIANDO O PIPELINE', '#ff9db0');
       resetRun(true); state = 'play'; MUS.on = true; SFX.error();
       return;
@@ -753,6 +829,7 @@ function die(forcado) {
   SFX.error();
   game.deaths++;
   game.deadIn = 'world';
+  track('player_death', { onde: 'mundo', zone: game.zone + 1, pos_x: Math.round(P.x), mortes: game.deaths });
   burst(P.x + P.w / 2, P.y + P.h / 2, 26, '#ff4d6d', 3);
   if (carry) { carry.held = false; carry.x = carry.hx; carry.y = carry.hy; carry = null; }
   state = 'dead';
@@ -778,6 +855,7 @@ function update() {
     // o gate de qualidade libera sozinho assim que o tagueamento esta completo
     if (gg.kind === 'quality' && !gg.open && game.schema >= game.schemaTotal) {
       gg.open = true; SFX.ok();
+      track('quality_gate_pass', { schema: game.schemaTotal });
       toast('GATE DE QUALIDADE: TAGUEAMENTO APROVADO', '#7ef29d');
       game.score += 800 * game.mult;
       burst(gg.x + 9, gg.y + 40, 22, '#7ef29d', 2.4);
@@ -786,6 +864,7 @@ function update() {
         Math.abs((P.x + P.w / 2) - (gg.x + gg.w / 2)) < 40) {
       if (!gg.warn || game.t - gg.warn > 260) {
         gg.warn = game.t;
+        track('quality_gate_block', { faltam: game.schemaTotal - game.schema });
         toast('GATE BLOQUEADO · FALTAM ' + (game.schemaTotal - game.schema) + ' CAMPOS DO DATALAYER (ZONA 1)', '#ff9db0');
         SFX.nope();
       }
@@ -795,7 +874,11 @@ function update() {
   for (var fi = 0; fi < bins.length; fi++) if (bins[fi].flash > 0) bins[fi].flash--;
   if (maestro) maestro.t++;
   if (brain) brain.t++;
-  if (state === 'space') { readInput(); game.spaceT++; return; }
+  if (state === 'space') {
+    readInput(); game.spaceT++;
+    if (game.spaceT === 1) fimDeJogo('nave_42');
+    return;
+  }
   if (state === 'winseq') { winSequence(); updateCam(); return; }
   if (state !== 'play') { updateCam(); return; }
 
@@ -858,6 +941,7 @@ function update() {
   for (i = 0; i < 4; i++) if (P.x >= ZB[i]) z = i;
   if (z !== game.zone) {
     game.zone = z; toast(ZONE_NAMES[z], '#39d3ff'); SFX.checkpoint();
+    track('zone_enter', { zone: z + 1, zone_nome: ZONE_SHORT[z], score: game.score });
     if (z === 3 && game.route === 'realtime') toast('THROTTLE DE PRECISAO NO PANTEAO', '#ffb020');
   }
 
@@ -887,12 +971,15 @@ function update() {
         game.score += 250 * game.mult;
         SFX.ok(); burst(bn.x + 17, bn.y, 16, bn.col, 2.2);
         toast('SCHEMA OK: ' + carry.key + ' → ' + bn.cat + '  (' + game.schema + '/' + game.schemaTotal + ')', '#7ef29d');
+        track('field_delivered', { campo: carry.key, caixa: bn.cat, schema: game.schema + '/' + game.schemaTotal });
         carry = null;
         if (game.schema >= game.schemaTotal) {
           toast('SCHEMA VALIDADO · DATALAYER PUBLICADO', '#ffe14d');
+          track('schema_complete', { campos: game.schemaTotal });
           game.score += 1000 * game.mult;
         }
       } else {
+        track('field_wrong_box', { campo: carry.key, caixa: bn.cat, esperado: carry.cat });
         carry.held = false; carry.x = carry.hx; carry.y = carry.hy;
         game.score = Math.max(0, game.score - 50);
         SFX.nope(); bn.flash = 20;
@@ -909,6 +996,7 @@ function update() {
     if (tg.got) continue;
     if (ov(P, tg)) {
       tg.got = true; game.tagsGot++;
+      track('tag_collected', { tag: tg.label, zone: game.zone + 1, total: game.tagsGot + '/' + game.tagsTotal });
       game.score += 100 * game.mult;
       SFX.collect(); burst(tg.x + 7, tg.y + 7, 12, '#ffe14d', 2);
     }
@@ -918,6 +1006,7 @@ function update() {
     var c = cps[i];
     if (!c.on && P.x + P.w > c.x - 6 && P.x < c.x + c.w + 6 && Math.abs((P.y + P.h) - (c.y + c.h)) < 46) {
       c.on = true; c.fw = 0; P.spawnX = c.x - 4; P.spawnY = c.y - 2;
+      track('checkpoint_reached', { zone: game.zone + 1, pos_x: Math.round(c.x), score: game.score });
       SFX.checkpoint(); SFX.fogos(); toast('CHECKPOINT', '#ffe14d');
       burst(c.x + 7, c.y, 20, '#ffe14d', 2.4);
       burst(c.x + 7, c.y - 20, 16, '#ff5f8f', 2.8);
@@ -948,6 +1037,7 @@ function update() {
     if (!lv.on && ov(P, lv)) {
       lv.on = true; SFX.lever();
       for (var g2 = 0; g2 < gates.length; g2++) if (gates[g2].kind === 'deploy') gates[g2].open = true;
+      track('deploy_prod', { zone: game.zone + 1 });
       toast('BUILD AUTORIZADO · DEPLOY EM PRODUCAO OK', '#7ef29d');
       game.score += 300 * game.mult;
       burst(lv.x + 10, lv.y + 6, 22, '#7ef29d', 2.4);
@@ -960,6 +1050,7 @@ function update() {
        Math.abs((P.y + P.h) - pipeRef.y) < 6);
     if (game.route === 'realtime' && emCima) {
       pipeRef.used = true;
+      track('pipe_enter', { rota: 'realtime' });
       pipeStart('in', pipeRef, 'tunnel');       // desce pelo cano, estilo Mario
       return;
     }
@@ -972,6 +1063,7 @@ function update() {
   if (maestro && !maestro.used && ov(P, maestro)) { state = 'route'; SFX.route(); return; }
   if (brain && state === 'play' && ov(P, brain)) {
     state = 'winseq'; game.winT = 0; MUS.on = false; SFX.boost();
+    track('ai_boost', { tags: game.tagsGot + '/' + game.tagsTotal, rota: game.route, score: game.score });
     game.aiBoost = true; game.mult = 10;
     return;
   }
@@ -2327,6 +2419,7 @@ function tunnelStart() {
   state = 'tunnel';
   MUS.on = true;
   SFX.turbo();
+  track('tunnel_start', {});
   toast('TUNEL REAL-TIME · ZERO LATENCY', '#ffe14d');
 }
 function tunnelFinish() {
@@ -2339,6 +2432,7 @@ function tunnelDeath() {
   SFX.error();
   game.deaths++;
   game.deadIn = 'tunnel';
+  track('player_death', { onde: 'tunel', progresso: Math.round(TUN.dist / TUN.goal * 100), mortes: game.deaths });
   burst(TUN.px + 6, TUN.y + 8, 26, '#ff4d6d', 3);
   MUS.on = false;
   state = 'dead';
@@ -2436,6 +2530,7 @@ function tunnelUpdate() {
   if (T.dist >= T.goal && !T.ok) {
     // a corrida acaba na porta da arena: a luta contra o FinOps abre em seguida
     T.ok = 1; T.okT = 0; SFX.victory();
+    track('tunnel_complete', { buffers: T.hp, estrelas: Object.keys(game.tunStars).length });
     game.score += 2500 + T.hp * 800;
   }
 }
@@ -2714,6 +2809,7 @@ function arenaStart(origem) {
     }
   };
   game.arenaFrom = origem;
+  track('finops_boss_start', { rota: origem, vidas: 3 });
   state = 'arena';
   MUS.on = true;
   SFX.route();
@@ -2725,6 +2821,10 @@ function arenaFinish() {
   finopsGate(true);
   game.zone = 3;
   cam.y = GY + 70 - VIEWH;
+  track('finops_savings', {
+    valor_brl: economia, moedas: Math.round(economia / 100000),
+    moeda_valor_brl: 100000, rota: origem
+  });
   toast('FINOPS · CUSTO OTIMIZADO EM ' + moeda(economia), '#7ef29d');
   if (exitPipe) {
     P.spawnX = exitPipe.x + 46; P.spawnY = GY - 40;
@@ -2741,6 +2841,7 @@ function arenaDeath() {
   SFX.error();
   game.deaths++;
   game.deadIn = 'arena';
+  track('player_death', { onde: 'arena_finops', rota: ARENA.origem, boss_hp: ARENA.boss.hp, mortes: game.deaths });
   burst(ARENA.x + 6, ARENA.y + 8, 26, '#ff4d6d', 3);
   MUS.on = false;
   state = 'dead';
@@ -2765,6 +2866,7 @@ function arenaBossHit() {
   if (B.hp <= 0) {
     B.dead = 1; B.dieT = 0; A.fase = 'explode'; A.faseT = 0; A.shake = 26;
     SFX.ok();
+    track('finops_boss_defeated', { rota: A.origem, vidas_restantes: A.lives, segundos: Math.round(A.t / 60) });
     // explode em moedas
     for (i = 0; i < 34; i++) {
       var ang = -Math.PI / 2 + (Math.random() - 0.5) * 2.5, v = 2 + Math.random() * 3.4;
@@ -3078,6 +3180,7 @@ function miniStart(kind) {
 function miniWin() {
   if (MINI.ok) return;
   MINI.ok = 1; MINI.okT = 0;
+  track('minigame_complete', { minigame: MINI.kind, segundos: Math.round(MINI.t / 60) });
   SFX.victory();
   burst(MINI.x + 6, MINI.y, 40, '#ffe14d', 3);
   game.score += 2500;
@@ -3085,7 +3188,22 @@ function miniWin() {
 function miniFinish() {
   MINI = null;
   if (game.dest !== null && DESTS[game.dest][0] === 'd-nproj') { state = 'q42'; SFX.boost(); }
-  else { state = 'win'; }
+  else { state = 'win'; fimDeJogo('win'); }
+}
+/* evento de conclusao: o retrato completo da run em um unico hit */
+function fimDeJogo(tipo) {
+  track('game_complete', {
+    final: tipo,
+    score: game.score,
+    tags: game.tagsGot,
+    tags_total: game.tagsTotal,
+    schema: game.schema + '/' + game.schemaTotal,
+    rota: game.route || 'nenhuma',
+    destino: game.dest !== null ? DESTS[game.dest][1] : 'nenhum',
+    finops_brl: game.finopsSave || 0,
+    falhas: game.deaths,
+    minutos: Math.round((Date.now() - RUN_T0) / 6000) / 10
+  });
 }
 
 function miniUpdate() {
